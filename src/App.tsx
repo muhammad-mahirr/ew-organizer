@@ -1339,7 +1339,7 @@ parsedClasses =
     <div className="brand-row">
 
       <img
-        src="/logo.svg"
+        src={`${import.meta.env.BASE_URL}logo.svg`}
         alt="ClassMate logo"
         className="brand-logo"
       />
