@@ -2,6 +2,10 @@
 
 A simple web app for organizing East West University semester schedules.
 
+## 🌐 Live Website
+
+[EWOrganizer](https://muhammad-mahirr.github.io/ew-organizer/)
+
 ## Features
 
 - Upload semester schedule files
