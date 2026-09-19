@@ -812,6 +812,40 @@ footer {
   color: #dc2626;
 }
 
+/* Export Button */
+
+.export-btn {
+  height: 28px;
+  min-width: 92px;
+
+  padding: 0 14px;
+
+  border: 1px solid #c4c4c6;
+  border-radius: 8px;
+
+  background: #fafafa;
+  color: #18181b;
+
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+  box-sizing: border-box;
+}
+
+.export-btn:hover {
+  background: #ffffff;
+  transform: translateY(-2px);
+}
+
+.routine-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 /*Add Class Button*/
 .add-class-btn {
   padding: 8px 12px;
@@ -968,6 +1002,83 @@ footer {
   border-color: #71717a;
   background: white;
 }
+
+/*Export button*/
+/* Export Modal */
+
+.export-modal {
+  max-width: 420px;
+}
+
+.export-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.export-option {
+  width: 100%;
+
+  display: flex;
+  align-items: center;
+  gap: 12px;
+
+  padding: 12px;
+
+  border: 1px solid #e4e4e7;
+  border-radius: 10px;
+
+  background: #fafafa;
+  color: #18181b;
+
+  font-family: inherit;
+  text-align: left;
+
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.export-option:hover {
+  background: #f4f4f5;
+  border-color: #d4d4d8;
+  transform: translateY(-1px);
+}
+
+.export-option-icon {
+  width: 34px;
+  height: 34px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  flex-shrink: 0;
+
+  border-radius: 8px;
+
+  background: white;
+  border: 1px solid #e4e4e7;
+
+  font-size: 16px;
+}
+
+.export-option span:last-child {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.export-option strong {
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.export-option small {
+  font-size: 10px;
+  color: #71717a;
+}
+
+/*end export*/
 
 .modal-actions {
   display: flex;
@@ -1222,3 +1333,4 @@ footer {
 .template-btn.active {
   font-weight: 600;
 }
+

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
 import "./App.css";
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
@@ -16,6 +18,8 @@ type ClassEntry = {
   end: string;
   room: string;
 };
+
+const STORAGE_KEY = "eworganizer-data";
 
 const dayNames: Record<string, string> = {
   A: "Saturday",
@@ -151,6 +155,65 @@ function normalizeTime(value: string): string {
   return value.replace(/\s+/g, "");
 }
 
+function extractFullStudentName(
+  text: string
+): string {
+  const normalizedText = text
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Format:
+  // Name: Fariha Nusrat Khan
+  const nameLabelMatch =
+    normalizedText.match(
+      /\bName\s*:\s*((?:Md\.?\s+)?[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})\b/i
+    );
+
+  if (nameLabelMatch?.[1]) {
+    return nameLabelMatch[1]
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Format:
+  // 2024-3-60-446 Fariha Nusrat Khan Fall-2026
+  const idFirstMatch =
+    normalizedText.match(
+      /\b\d{4}-\d+-\d+-\d+\s+((?:Md\.?\s+)?[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})\s+(?:Fall|Spring|Summer)-\d{4}\b/i
+    );
+
+  if (idFirstMatch?.[1]) {
+    return idFirstMatch[1]
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // Format:
+  // Fariha Nusrat Khan 2024-3-60-446 Fall-2026
+  const nameFirstMatch =
+    normalizedText.match(
+      /\b((?:Md\.?\s+)?[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){1,5})\s+\d{4}-\d+-\d+-\d+\s+(?:Fall|Spring|Summer)-\d{4}\b/i
+    );
+
+  if (nameFirstMatch?.[1]) {
+    return nameFirstMatch[1]
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  return "Student";
+}
+
+function extractStudentId(
+  text: string
+): string {
+  const match = text.match(
+    /\b\d{4}-\d+-\d+-\d+\b/
+  );
+
+  return match?.[0] || "";
+}
+
 function extractStudentName(
   text: string
 ): string {
@@ -193,30 +256,18 @@ function extractStudentName(
   return nameParts[0] || "Student";
 }
 
-function getFirstName(
-  fullName: string
-): string {
-  const nameParts =
-    fullName
-      .replace(/\s+/g, " ")
-      .trim()
-      .split(" ");
-
-  // Skip "Md." or "Md"
-  if (
-    nameParts.length > 1 &&
-    /^md\.?$/i.test(nameParts[0])
-  ) {
-    return nameParts[1];
-  }
-
-  return nameParts[0] || "Student";
-}
 
 
-function extractStudentNameFromExcel(
+function extractStudentInfoFromExcel(
   workbook: XLSX.WorkBook
-): string {
+): {
+  firstName: string;
+  fullName: string;
+  studentId: string;
+} {
+  let fullName = "";
+  let studentId = "";
+
   for (
     const sheetName of workbook.SheetNames
   ) {
@@ -246,7 +297,6 @@ function extractStudentNameFromExcel(
       ) {
         const value = values[i];
 
-        // Example:
         // Name: Md. Mahir Hasan Shuvo
         if (
           /^name\s*:/i.test(value)
@@ -260,31 +310,72 @@ function extractStudentNameFromExcel(
               .trim();
 
           if (name) {
-            return getFirstName(name);
-          }
-
-          if (values[i + 1]) {
-            return getFirstName(
-              values[i + 1]
-            );
+            fullName = name;
+          } else if (
+            values[i + 1]
+          ) {
+            fullName =
+              values[i + 1];
           }
         }
 
-        // Example:
         // Name | Md. Mahir Hasan Shuvo
         if (
           /^name$/i.test(value) &&
           values[i + 1]
         ) {
-          return getFirstName(
-            values[i + 1]
-          );
+          fullName =
+            values[i + 1];
+        }
+
+        // ID# | 2024-3-60-162
+        if (
+          /^id#?$/i.test(value) &&
+          values[i + 1]
+        ) {
+          studentId =
+            values[i + 1];
+        }
+
+        // Direct ID detection
+        if (
+          /^\d{4}-\d+-\d+-\d+$/.test(
+            value
+          )
+        ) {
+          studentId = value;
         }
       }
     }
   }
 
-  return "Student";
+  fullName = fullName
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const nameParts =
+    fullName.split(" ");
+
+  let firstName =
+    nameParts[0] || "Student";
+
+  // Skip Md. / Md
+  if (
+    nameParts.length > 1 &&
+    /^md\.?$/i.test(
+      nameParts[0]
+    )
+  ) {
+    firstName =
+      nameParts[1];
+  }
+
+  return {
+    firstName,
+    fullName:
+      fullName || "Student",
+    studentId,
+  };
 }
 
 /*
@@ -1041,7 +1132,9 @@ function parseExcelWorkbook(
 
 async function parseFile(
   file: File,
-  onStudentName?: (name: string) => void
+  onStudentName?: (name: string) => void,
+  onStudentFullName?: (name: string) => void,
+  onStudentId?: (id: string) => void
 ): Promise<ClassEntry[]> {
   const extension =
     file.name
@@ -1081,12 +1174,22 @@ if (
     );
 
   // Get text from the first Excel sheet
-const extractedName =
-  extractStudentNameFromExcel(
+const studentInfo =
+  extractStudentInfoFromExcel(
     workbook
   );
 
-onStudentName?.(extractedName);
+onStudentName?.(
+  studentInfo.firstName
+);
+
+onStudentFullName?.(
+  studentInfo.fullName
+);
+
+onStudentId?.(
+  studentInfo.studentId
+);
 
   // Existing Excel schedule parsing
   return parseExcelWorkbook(
@@ -1119,17 +1222,111 @@ function App() {
       window.clearInterval(timer);
   }, []);
 
-  const [fileName, setFileName] =
-    useState("");
 
-  const [studentName, setStudentName] =
-  useState("Student");
-  
+  const [fileName, setFileName] = useState(() => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
 
-  const [classes, setClasses] =
-    useState<ClassEntry[]>(
-      []
-    );
+    if (!saved) {
+      return "";
+    }
+
+    const data = JSON.parse(saved);
+
+    return data.fileName || "";
+  } catch {
+    return "";
+  }
+});
+
+const [studentName, setStudentName] = useState(() => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) {
+      return "Student";
+    }
+
+    const data = JSON.parse(saved);
+
+    return data.studentName || "Student";
+  } catch {
+    return "Student";
+  }
+});
+
+const [studentFullName, setStudentFullName] =
+  useState(() => {
+    try {
+      const saved =
+        localStorage.getItem(STORAGE_KEY);
+
+      if (!saved) {
+        return "Student";
+      }
+
+      const data = JSON.parse(saved);
+
+      return data.studentFullName || "Student";
+    } catch {
+      return "Student";
+    }
+  });
+
+const [studentId, setStudentId] =
+  useState(() => {
+    try {
+      const saved =
+        localStorage.getItem(STORAGE_KEY);
+
+      if (!saved) {
+        return "";
+      }
+
+      const data = JSON.parse(saved);
+
+      return data.studentId || "";
+    } catch {
+      return "";
+    }
+  });
+
+const [classes, setClasses] = useState<ClassEntry[]>(() => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+
+    if (!saved) {
+      return [];
+    }
+
+    const data = JSON.parse(saved);
+
+    return Array.isArray(data.classes)
+      ? data.classes
+      : [];
+  } catch {
+    return [];
+  }
+});
+
+useEffect(() => {
+  localStorage.setItem(
+    STORAGE_KEY,
+    JSON.stringify({
+      fileName,
+      studentName,
+      studentFullName,
+      studentId,
+      classes,
+    })
+  );
+}, [
+  fileName,
+  studentName,
+  studentFullName,
+  studentId,
+  classes,
+]);
 
   const [loading, setLoading] =
     useState(false);
@@ -1141,6 +1338,9 @@ function App() {
     useState<number | null>(null);
 
   const [addingClass, setAddingClass] =
+  useState(false);
+
+  const [showExportModal, setShowExportModal] =
   useState(false);
 
 const [newClass, setNewClass] =
@@ -1258,78 +1458,1001 @@ for (let offset = 1; offset <= 7; offset++) {
     setLoading(true);
 
 
-    try {
-let pdfText = "";
+try {
+  let parsedClasses: ClassEntry[];
 
-if (
-  extension === "pdf"
-) {
-  pdfText =
-    await extractPdfText(
-      file
+  if (extension === "pdf") {
+    const pdfText =
+      await extractPdfText(file);
+
+    const extractedName =
+      extractStudentName(pdfText);
+
+    const extractedFullName =
+      extractFullStudentName(pdfText);
+
+    const extractedId =
+      extractStudentId(pdfText);
+
+    console.log(
+      "===== STUDENT INFO ====="
     );
 
-  setStudentName(
-    extractStudentName(
-      pdfText
-    )
-  );
-}
+    console.log(
+      "First name:",
+      extractedName
+    );
 
-let parsedClasses: ClassEntry[];
+    console.log(
+      "Full name:",
+      extractedFullName
+    );
 
-if (extension === "pdf") {
-const pdfText =
-  await extractPdfText(file);
+    console.log(
+      "Student ID:",
+      extractedId
+    );
 
-console.log("===== PDF TEXT =====");
-console.log(pdfText);
-console.log("====================");
+    console.log(
+      "========================"
+    );
 
-const extractedName =
-  extractStudentName(pdfText);
+    setStudentName(
+      extractedName
+    );
 
-console.log("===== EXTRACTED NAME =====");
-console.log(extractedName);
-console.log("==========================");
+    setStudentFullName(
+      extractedFullName
+    );
 
-setStudentName(extractedName);
+    setStudentId(
+      extractedId
+    );
 
-  parsedClasses =
-    parsePdfText(pdfText);
+    parsedClasses =
+      parsePdfText(pdfText);
+
 } else {
-parsedClasses =
-  await parseFile(
-    file,
-    setStudentName
-  );
+  parsedClasses =
+    await parseFile(
+      file,
+      setStudentName,
+      setStudentFullName,
+      setStudentId
+    );
 }
 
+  if (
+    parsedClasses.length ===
+    0
+  ) {
+    setError(
+      "No class schedule could be found in this file."
+    );
+  } else {
+    setClasses(
+      parsedClasses
+    );
+  }
 
-      if (
-        parsedClasses.length ===
-        0
-      ) {
-        setError(
-          "No class schedule could be found in this file."
-        );
-      } else {
-        setClasses(
-          parsedClasses
-        );
-      }
-    } catch (err) {
-      console.error(err);
+} catch (err) {
+  console.error(err);
 
-
-      setError(
-        "Something went wrong while reading the file."
-      );
-    } finally {
-      setLoading(false);
-    }
+  setError(
+    "Something went wrong while reading the file."
+  );
+} finally {
+  setLoading(false);
+}
   };
 
+const exportRoutinePDF = async () => {
+  if (classes.length === 0) {
+    alert("There is no routine to export.");
+    return;
+  }
+
+  try {
+    /* =========================
+       LOAD LOGO
+    ========================= */
+
+    const logoUrl = new URL(
+      `${import.meta.env.BASE_URL}logo.svg`,
+      window.location.origin
+    ).href;
+
+    const logoResponse = await fetch(logoUrl);
+
+    if (!logoResponse.ok) {
+      throw new Error(
+        `Could not load logo.svg: ${logoResponse.status}`
+      );
+    }
+
+const logoSvgText =
+  await logoResponse.text();
+
+/* =========================
+   CONVERT SVG → PNG
+========================= */
+
+const logoBlob =
+  new Blob(
+    [logoSvgText],
+    {
+      type: "image/svg+xml",
+    }
+  );
+
+const logoObjectUrl =
+  URL.createObjectURL(logoBlob);
+
+const logoImage =
+  new Image();
+
+logoImage.src =
+  logoObjectUrl;
+
+await new Promise<void>(
+  (resolve, reject) => {
+    logoImage.onload = () =>
+      resolve();
+
+    logoImage.onerror = () =>
+      reject(
+        new Error(
+          "Could not render logo.svg"
+        )
+      );
+  }
+);
+
+const logoCanvas =
+  document.createElement("canvas");
+
+const logoWidth = 300;
+
+const logoHeight =
+  logoImage.naturalHeight *
+  (logoWidth /
+    logoImage.naturalWidth);
+
+logoCanvas.width =
+  logoWidth;
+
+logoCanvas.height =
+  logoHeight;
+
+const logoContext =
+  logoCanvas.getContext("2d");
+
+if (!logoContext) {
+  throw new Error(
+    "Could not create logo canvas"
+  );
+}
+
+logoContext.drawImage(
+  logoImage,
+  0,
+  0,
+  logoWidth,
+  logoHeight
+);
+
+const logoDataUrl =
+  logoCanvas.toDataURL(
+    "image/png"
+  );
+
+URL.revokeObjectURL(
+  logoObjectUrl
+);
+    /* =========================
+       CREATE PDF
+    ========================= */
+
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "mm",
+      format: "a4",
+    });
+
+    const pageWidth = 297;
+    const pageHeight = 210;
+
+    const margin = 10;
+    const contentWidth =
+      pageWidth - margin * 2;
+
+    const columnGap = 2;
+
+    const columnWidth =
+      (contentWidth -
+        columnGap * 6) /
+      7;
+
+    /* =========================
+       HEADER
+    ========================= */
+
+    // Logo
+const pdfLogoWidth = 22;
+
+const pdfLogoHeight =
+  pdfLogoWidth *
+  (logoImage.naturalHeight /
+    logoImage.naturalWidth);
+
+doc.addImage(
+  logoDataUrl,
+  "PNG",
+  margin,
+  7,
+  pdfLogoWidth,
+  pdfLogoHeight
+);
+
+    // Title
+    doc.setFont(
+      "helvetica",
+      "bold"
+    );
+
+    doc.setFontSize(22);
+
+    doc.text(
+      "EWOrganizer",
+      margin + 27,
+      17
+    );
+
+    // Subtitle
+    doc.setFont(
+      "helvetica",
+      "normal"
+    );
+
+    doc.setFontSize(10);
+
+    doc.text(
+      "Weekly Routine",
+      margin + 27,
+      23
+    );
+
+    /* =========================
+       STUDENT INFO
+    ========================= */
+
+    doc.setFontSize(10);
+
+    doc.text(
+      `Student: ${studentFullName}`,
+      pageWidth - margin,
+      17,
+      {
+        align: "right",
+      }
+    );
+
+    if (studentId) {
+      doc.setFontSize(9);
+
+      doc.text(
+        `ID: ${studentId}`,
+        pageWidth - margin,
+        23,
+        {
+          align: "right",
+        }
+      );
+    }
+
+    /* =========================
+       ROUTINE GRID
+    ========================= */
+
+    const gridTop = 31;
+    const headerHeight = 10;
+
+    days.forEach(
+      (day, dayIndex) => {
+        const x =
+          margin +
+          dayIndex *
+            (columnWidth + columnGap);
+
+        /* =========================
+           DAY HEADER
+        ========================= */
+
+        doc.setFillColor(
+          0,
+          0,
+          0
+        );
+
+        doc.roundedRect(
+          x,
+          gridTop,
+          columnWidth,
+          headerHeight,
+          2,
+          2,
+          "F"
+        );
+
+        doc.setTextColor(
+          255,
+          255,
+          255
+        );
+
+        doc.setFont(
+          "helvetica",
+          "bold"
+        );
+
+        doc.setFontSize(8);
+
+        doc.text(
+          day,
+          x +
+            columnWidth / 2,
+          gridTop + 6.5,
+          {
+            align: "center",
+          }
+        );
+
+        doc.setTextColor(
+          0,
+          0,
+          0
+        );
+
+        /* =========================
+           CLASSES
+        ========================= */
+
+        const dayClasses =
+          classes
+            .filter(
+              (item) =>
+                item.day === day
+            )
+            .sort(
+              (a, b) =>
+                a.start.localeCompare(
+                  b.start
+                )
+            );
+
+        let cardY =
+          gridTop +
+          headerHeight +
+          3;
+
+        dayClasses.forEach(
+          (item) => {
+            /* =========================
+               ROOM TEXT
+            ========================= */
+
+            const roomText =
+              `Room: ${item.room}`;
+
+            doc.setFont(
+              "helvetica",
+              "normal"
+            );
+
+            doc.setFontSize(6.5);
+
+            const roomLines =
+              doc.splitTextToSize(
+                roomText,
+                columnWidth - 5
+              );
+
+            /* =========================
+               CARD HEIGHT
+            ========================= */
+
+            const cardHeight =
+              (item.section
+                ? 30
+                : 26) +
+              Math.max(
+                0,
+                roomLines.length - 1
+              ) *
+                4;
+
+            /* =========================
+               CARD
+            ========================= */
+
+            doc.setDrawColor(
+              225,
+              225,
+              228
+            );
+
+            doc.setFillColor(
+              255,
+              255,
+              255
+            );
+
+            doc.roundedRect(
+              x,
+              cardY,
+              columnWidth,
+              cardHeight,
+              2,
+              2,
+              "FD"
+            );
+
+            /* =========================
+               COURSE
+            ========================= */
+
+            doc.setFont(
+              "helvetica",
+              "bold"
+            );
+
+            doc.setFontSize(7.5);
+
+            doc.text(
+              item.course,
+              x + 2.5,
+              cardY + 6
+            );
+
+            /* =========================
+               SECTION
+            ========================= */
+
+            if (item.section) {
+              doc.setFont(
+                "helvetica",
+                "normal"
+              );
+
+              doc.setFontSize(6.5);
+
+              doc.text(
+                `Section ${item.section}`,
+                x + 2.5,
+                cardY + 11
+              );
+            }
+
+            /* =========================
+               TIME
+            ========================= */
+
+            const timeY =
+              item.section
+                ? cardY + 17
+                : cardY + 12;
+
+            doc.setFont(
+              "helvetica",
+              "normal"
+            );
+
+            doc.setFontSize(6.5);
+
+            doc.text(
+              `${item.start} - ${item.end}`,
+              x + 2.5,
+              timeY
+            );
+
+            /* =========================
+               ROOM
+            ========================= */
+
+            doc.text(
+              roomLines,
+              x + 2.5,
+              timeY + 5
+            );
+
+            cardY +=
+              cardHeight + 3;
+          }
+        );
+      }
+    );
+
+    /* =========================
+       FOOTER
+    ========================= */
+
+    doc.setFont(
+      "helvetica",
+      "normal"
+    );
+
+    doc.setFontSize(7);
+
+    doc.text(
+      `Generated by EWOrganizer • ${classes.length} class sessions`,
+      pageWidth / 2,
+      pageHeight - 7,
+      {
+        align: "center",
+      }
+    );
+
+    /* =========================
+       DOWNLOAD
+    ========================= */
+
+    doc.save(
+      "EWOrganizer-Routine.pdf"
+    );
+
+  } catch (error) {
+    console.error(
+      "PDF export failed:",
+      error
+    );
+
+    alert(
+      "Something went wrong while exporting the PDF."
+    );
+  }
+};
+
+const exportRoutinePNG = async () => {
+  if (classes.length === 0) {
+    alert("There is no routine to export.");
+    return;
+  }
+
+  const routineElement =
+    document.querySelector(".routine-grid") as HTMLElement | null;
+
+  if (!routineElement) {
+    alert("Could not find the routine to export.");
+    return;
+  }
+
+  try {
+    /* =========================
+       LOAD EXISTING LOGO SVG
+    ========================= */
+
+    const logoUrl = new URL(
+      `${import.meta.env.BASE_URL}logo.svg`,
+      window.location.origin
+    ).href;
+
+    const logoResponse = await fetch(logoUrl);
+
+    if (!logoResponse.ok) {
+      throw new Error(
+        `Could not load logo.svg: ${logoResponse.status}`
+      );
+    }
+
+    const logoSvgText =
+      await logoResponse.text();
+
+const logoBlob =
+  new Blob(
+    [logoSvgText],
+    { type: "image/svg+xml" }
+  );
+
+const logoObjectUrl =
+  URL.createObjectURL(logoBlob);
+
+const logoImage =
+  new Image();
+
+logoImage.src =
+  logoObjectUrl;
+
+await new Promise<void>((resolve, reject) => {
+  logoImage.onload = () =>
+    resolve();
+
+  logoImage.onerror = () =>
+    reject(
+      new Error("Could not render logo.svg")
+    );
+});
+
+const logoCanvas =
+  document.createElement("canvas");
+
+logoCanvas.width = 300;
+logoCanvas.height = 300;
+
+const logoContext =
+  logoCanvas.getContext("2d");
+
+if (!logoContext) {
+  throw new Error(
+    "Could not create logo canvas"
+  );
+}
+
+logoContext.drawImage(
+  logoImage,
+  0,
+  0,
+  300,
+  300
+);
+
+URL.revokeObjectURL(
+  logoObjectUrl
+); 
+
+    /* =========================
+       CREATE ROUTINE IMAGE
+    ========================= */
+
+    const canvas =
+      await html2canvas(routineElement, {
+        backgroundColor: "#f6f7f9",
+        scale: 2,
+        useCORS: true,
+
+        onclone: (clonedDocument) => {
+          const clonedGrid =
+            clonedDocument.querySelector(
+              ".routine-grid"
+            ) as HTMLElement | null;
+
+          if (!clonedGrid) return;
+
+          /* =========================
+             EXPORT SIZE
+          ========================= */
+
+          clonedGrid.style.width = "1400px";
+          clonedGrid.style.maxWidth = "1400px";
+          clonedGrid.style.minWidth = "1400px";
+
+          clonedGrid.style.display = "grid";
+
+          clonedGrid.style.gridTemplateColumns =
+            "repeat(7, minmax(0, 1fr))";
+
+          clonedGrid.style.gap = "10px";
+
+          clonedGrid.style.paddingTop = "105px";
+          clonedGrid.style.paddingBottom = "55px";
+          clonedGrid.style.paddingLeft = "0";
+          clonedGrid.style.paddingRight = "0";
+
+          clonedGrid.style.boxSizing =
+            "border-box";
+
+          clonedGrid.style.position =
+            "relative";
+
+          /* =========================
+             HIDE WEB-ONLY BUTTONS
+          ========================= */
+
+          clonedGrid
+            .querySelectorAll(
+              ".edit-btn, .delete-btn"
+            )
+            .forEach((button) => {
+              (
+                button as HTMLElement
+              ).style.display = "none";
+            });
+
+          /* =========================
+             EXPORT HEADER
+          ========================= */
+
+          const header =
+            clonedDocument.createElement("div");
+
+          header.style.position =
+            "absolute";
+
+          header.style.top = "12px";
+          header.style.left = "24px";
+          header.style.right = "24px";
+
+          header.style.display = "flex";
+
+          header.style.alignItems =
+            "flex-start";
+
+          header.style.justifyContent =
+            "space-between";
+
+          /* =========================
+             LEFT BRANDING
+          ========================= */
+
+          const left =
+            clonedDocument.createElement("div");
+
+          left.style.display = "flex";
+          left.style.flexDirection =
+            "column";
+
+          left.style.alignItems =
+            "flex-start";
+
+          /* =========================
+   LOGO + TEXT
+========================= */
+
+const branding =
+  clonedDocument.createElement("div");
+
+branding.style.display = "flex";
+branding.style.alignItems = "center";
+branding.style.gap = "8px";
+
+/* =========================
+   INLINE SVG LOGO
+========================= */
+
+const parser =
+  new DOMParser();
+
+const parsedLogo =
+  parser.parseFromString(
+    logoSvgText,
+    "image/svg+xml"
+  );
+
+const logoSvg =
+  parsedLogo.documentElement;
+
+logoSvg.setAttribute(
+  "width",
+  "88"
+);
+
+logoSvg.setAttribute(
+  "height",
+  "88"
+);
+
+logoSvg.style.width = "88px";
+logoSvg.style.height = "88px";
+logoSvg.style.display = "block";
+logoSvg.style.flexShrink = "0";
+
+/* Import SVG into cloned document */
+
+const importedLogo =
+  clonedDocument.importNode(
+    logoSvg,
+    true
+);
+
+/* =========================
+   TITLE + SUBTITLE COLUMN
+========================= */
+
+const textBlock =
+  clonedDocument.createElement("div");
+
+textBlock.style.display = "flex";
+textBlock.style.flexDirection =
+  "column";
+
+textBlock.style.alignItems =
+  "flex-start";
+
+const title =
+  clonedDocument.createElement("div");
+
+title.textContent =
+  "EWOrganizer";
+
+title.style.fontSize = "30px";
+title.style.fontWeight = "700";
+title.style.lineHeight = "1";
+title.style.color = "#18181b";
+
+textBlock.appendChild(
+  title
+);
+
+/* =========================
+   SUBTITLE
+========================= */
+
+const subtitle =
+  clonedDocument.createElement("div");
+
+subtitle.textContent =
+  "Weekly Routine";
+
+subtitle.style.marginTop = "7px";
+subtitle.style.fontSize = "14px";
+subtitle.style.fontWeight = "500";
+subtitle.style.lineHeight = "1.2";
+subtitle.style.color = "#71717a";
+
+textBlock.appendChild(
+  subtitle
+);
+
+/* =========================
+   COMBINE LOGO + TEXT
+========================= */
+
+branding.appendChild(
+  importedLogo
+);
+
+branding.appendChild(
+  textBlock
+);
+
+left.appendChild(
+  branding
+);
+
+          /* =========================
+             RIGHT STUDENT INFO
+          ========================= */
+
+          const right =
+            clonedDocument.createElement(
+              "div"
+            );
+
+          right.style.display = "flex";
+
+          right.style.flexDirection =
+            "column";
+
+          right.style.alignItems =
+            "flex-end";
+
+          right.style.textAlign =
+            "right";
+
+          const student =
+            clonedDocument.createElement(
+              "div"
+            );
+
+          student.textContent =
+            `Student: ${studentFullName}`;
+
+          student.style.fontSize = "19px";
+
+          student.style.fontWeight =
+            "700";
+
+          student.style.lineHeight =
+            "1.2";
+
+          student.style.color =
+            "#18181b";
+
+          right.appendChild(
+            student
+          );
+
+          if (studentId) {
+            const id =
+              clonedDocument.createElement(
+                "div"
+              );
+
+            id.textContent =
+              `ID: ${studentId}`;
+
+            id.style.marginTop = "8px";
+
+            id.style.fontSize = "16px";
+
+            id.style.fontWeight =
+              "500";
+
+            id.style.lineHeight =
+              "1.2";
+
+            id.style.color =
+              "#71717a";
+
+            right.appendChild(
+              id
+            );
+          }
+
+          header.appendChild(
+            left
+          );
+
+          header.appendChild(
+            right
+          );
+
+          clonedGrid.appendChild(
+            header
+          );
+
+          /* =========================
+             FOOTER
+          ========================= */
+
+          const footer =
+            clonedDocument.createElement(
+              "div"
+            );
+
+          footer.textContent =
+            `Generated by EWOrganizer • ${classes.length} class sessions`;
+
+          footer.style.position =
+            "absolute";
+
+          footer.style.bottom = "18px";
+
+          footer.style.left = "0";
+          footer.style.right = "0";
+
+          footer.style.textAlign =
+            "center";
+
+          footer.style.fontSize = "11px";
+
+          footer.style.fontWeight =
+            "500";
+
+          footer.style.color =
+            "#a1a1aa";
+
+          clonedGrid.appendChild(
+            footer
+          );
+        },
+      });
+
+    /* =========================
+       DOWNLOAD
+    ========================= */
+
+    const link =
+      document.createElement("a");
+
+    link.download =
+      "EWOrganizer-Routine.png";
+
+    link.href =
+      canvas.toDataURL("image/png");
+
+    link.click();
+
+  } catch (error) {
+    console.error(
+      "PNG export failed:",
+      error
+    );
+
+    alert(
+      "Something went wrong while exporting the routine."
+    );
+  }
+};
 
   return (
 <div className="app">
@@ -1538,31 +2661,143 @@ className={`timeline-class ${
 {/* Weekly Routine */}
 <section className="routine-section">
 
-  <div className="section-header">
+<div className="section-header">
 
-    <div>
+  <div>
 
-      <h2>
-        Weekly Routine
-      </h2>
+    <h2>
+      Weekly Routine
+    </h2>
 
-      <p>
-        {classes.length} class sessions
-        found
-      </p>
+    <p>
+      {classes.length} class sessions
+      found
+    </p>
 
-    </div>
+  </div>
+
+<div className="routine-actions">
+  <button
+    className="export-btn"
+  onClick={() => {
+    setShowExportModal(true);
+  }}
+>
+  Export
+</button>
 
     <button
       className="add-class-btn"
       onClick={() => {
-      setAddingClass(true);
-     }}
-      >
+        setAddingClass(true);
+      }}
+    >
       + Add Class
-      </button>
+    </button>
+  </div>
 
-   </div>
+</div>
+
+{showExportModal && (
+  <div
+    className="modal-overlay"
+    onClick={() => setShowExportModal(false)}
+  >
+    <div
+      className="add-class-modal export-modal"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <div className="modal-header">
+        <div>
+          <h3>Export Routine</h3>
+          <p>Choose what you want to do</p>
+        </div>
+
+        <button
+          className="modal-close"
+          onClick={() =>
+            setShowExportModal(false)
+          }
+        >
+          ✕
+        </button>
+      </div>
+
+      <div className="export-options">
+
+        <button
+          className="export-option"
+onClick={async () => {
+  setShowExportModal(false);
+  await exportRoutinePDF();
+}}
+        >
+          <span className="export-option-icon">
+            📄
+          </span>
+
+          <span>
+            <strong>Export as PDF</strong>
+            <small>
+              Download your routine as a PDF
+            </small>
+          </span>
+        </button>
+
+        <button
+          className="export-option"
+          onClick={() => {
+            setShowExportModal(false);
+            exportRoutinePNG();
+          }}
+        >
+          <span className="export-option-icon">
+            🖼️
+          </span>
+
+          <span>
+            <strong>Export as PNG</strong>
+            <small>
+              Save your routine as an image
+            </small>
+          </span>
+        </button>
+
+        <button
+          className="export-option"
+          onClick={() => {
+            setShowExportModal(false);
+            alert("Share feature coming next.");
+          }}
+        >
+          <span className="export-option-icon">
+            🔗
+          </span>
+
+          <span>
+            <strong>Share</strong>
+            <small>
+              Share your routine with others
+            </small>
+          </span>
+        </button>
+
+      </div>
+
+      <div className="modal-actions">
+        <button
+          className="modal-cancel"
+          onClick={() =>
+            setShowExportModal(false)
+          }
+        >
+          Cancel
+        </button>
+      </div>
+
+    </div>
+  </div>
+)}
 
 {addingClass && (
   <div
