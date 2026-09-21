@@ -2553,9 +2553,31 @@ left.appendChild(
 
   {/* TODAY SUMMARY */}
   <div className="today-info">
-    <div className="today-date">
-      {formatToday(now)}
+<div className="today-date">
+  {/* Desktop / tablet date */}
+  <div className="desktop-date">
+    <div className="today-weekday">
+      {now.toLocaleDateString("en-US", {
+        weekday: "long",
+      })}
     </div>
+
+    <div className="today-month">
+      {now.toLocaleDateString("en-US", {
+        month: "short",
+      }).toUpperCase()}
+    </div>
+
+    <div className="today-day">
+      {now.getDate()}
+    </div>
+  </div>
+
+  {/* Mobile date — keep the original format */}
+  <div className="mobile-date">
+    {formatToday(now)}
+  </div>
+</div>
 
     <div className="today-count">
       {todayClasses.length === 0
@@ -2607,7 +2629,7 @@ className={`timeline-class ${
           {item.start}
           {" – "}
           {item.end}
-          {" · "}
+          {" · Room: "}
           {item.room}
         </div>
 

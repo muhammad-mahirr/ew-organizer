@@ -497,6 +497,14 @@ footer {
     text-align: left;
     padding: 10px 14px;
   }
+
+  .desktop-date {
+  display: none;
+}
+
+.mobile-date {
+  display: block;
+}
 }
 
 
@@ -658,6 +666,7 @@ footer {
   margin-top: 5px;
   color: #52525b;
   font-size: 11px;
+  font-weight: 550;
 }
 
 .today-header {
@@ -1334,3 +1343,126 @@ footer {
   font-weight: 600;
 }
 
+/* ============================================================
+   TODAY PANEL — TABLET / PC / DESKTOP
+   Applies only above mobile width
+============================================================ */
+
+@media (min-width: 701px) {
+  .today-panel {
+    display: flex;
+    align-items: stretch;
+    padding: 20px 22px;
+    gap: 0;
+  }
+
+  /* LEFT: TODAY DATE */
+  .today-info {
+    flex: 0 0 330px;
+    min-width: 330px;
+
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+
+    padding-right: 24px;
+    text-align: center;
+  }
+
+  /* RIGHT SIDE */
+  .today-classes {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    overflow: visible;
+    border-left: 1px solid #e4e4e7;
+    padding-left: 24px;
+  }
+
+  /* RUNNING / NEXT / UPCOMING */
+  .timeline-class {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 10px 0;
+    padding: 14px 18px;
+    border-radius: 12px;
+  }
+
+  /* NEXT DAY SECTION */
+  .next-day-class {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    margin: 2px 0 0;
+    padding: 16px 0 0;
+    border-left: none;
+    border-top: 1px solid #e4e4e7;
+  }
+
+  /* WHEN TODAY IS FINISHED */
+  .today-finished {
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    margin: 0 0 10px;
+    padding: 14px 0;
+    border-left: none;
+  }
+
+  .desktop-date {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.mobile-date {
+  display: none;
+}
+
+.today-weekday {
+  font-size: 18px;
+  font-weight: 700;
+  margin-bottom: 18px;
+}
+
+.today-month {
+  font-size: 38px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.today-day {
+  font-size: 52px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  margin-top: 4px;
+}
+
+.today-count {
+  margin-top: 22px;
+}
+
+
+  .today-weekday {
+    margin-top: 22px;
+    font-size: 20px;
+  }
+
+  .today-month {
+    font-size: 51px;
+  }
+
+  .today-day {
+    font-size: 51px;
+  }
+
+  .today-count {
+    margin-bottom: 22px;
+    font-size: 19px;
+  }
+}
