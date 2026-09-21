@@ -1466,3 +1466,224 @@ footer {
     font-size: 19px;
   }
 }
+
+.ewu-portal-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px 15px;
+  border-radius: 90px;
+  border: 1px solid #2563eb;
+  background: #2563eb;
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+  transition:
+    background-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.2s ease;
+}
+
+.ewu-portal-button:hover {
+  background: #1d4ed8;
+  box-shadow:
+    0 0 0 3px rgba(37, 99, 235, 0.12),
+    0 0 18px rgba(37, 99, 235, 0.38);
+  transform: translateY(-1px);
+}
+
+@media (max-width: 700px) {
+  .ewu-portal-button {
+    margin-top: 15px;
+    padding: 8px 11px;
+    font-size: 12px;
+    border-radius: 90px;
+    white-space: nowrap;
+  }
+}
+
+/* ============================================================
+   SEMESTER SLIP → STUDENT IDENTITY FLIP
+============================================================ */
+
+.slip-flip {
+  width: 100%;
+  perspective: 1400px;
+}
+
+.slip-flip-inner {
+  position: relative;
+  width: 100%;
+  min-height: 300px;
+  transform-style: preserve-3d;
+  transition:
+    transform 0.85s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.slip-flip-inner.is-flipped {
+  transform: rotateY(180deg);
+}
+
+.slip-face {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 300px;
+  box-sizing: border-box;
+
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
+.slip-front {
+  transform: rotateY(0deg);
+}
+
+.slip-back {
+  transform: rotateY(180deg);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+
+  padding: 35px 25px;
+
+  text-align: center;
+
+  background:
+    radial-gradient(
+      circle at top right,
+      rgba(37, 99, 235, 0.08),
+      transparent 35%
+    ),
+    white;
+
+  border: 1px solid #e4e4e7;
+  border-radius: 22px;
+
+  box-shadow:
+    0 8px 30px rgba(0, 0, 0, 0.045);
+}
+
+.identity-icon {
+  width: 58px;
+  height: 58px;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-bottom: 13px;
+
+  border-radius: 17px;
+
+  background: #eff6ff;
+
+  font-size: 27px;
+}
+
+.identity-label {
+  margin-bottom: 8px;
+
+  color: #2563eb;
+
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+}
+
+.identity-name {
+  margin: 0;
+
+  color: #18181b;
+
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+}
+
+.identity-id {
+  margin-top: 7px;
+
+  color: #52525b;
+
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+}
+
+.identity-department {
+  margin-top: 6px;
+
+  color: #DB2777;
+
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.identity-file {
+  margin-top: 12px;
+
+  color: #16a34a;
+
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.replace-slip-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  margin-top: 20px;
+
+  padding: 9px 15px;
+
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+
+  background: white;
+  color: #3f3f46;
+
+  font-size: 12px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.replace-slip-button:hover {
+  background: #fafafa;
+  border-color: #a1a1aa;
+
+  transform: translateY(-1px);
+
+  box-shadow:
+    0 5px 15px rgba(0, 0, 0, 0.08);
+}
+
+@media (max-width: 700px) {
+  .slip-flip-inner {
+    min-height: 285px;
+  }
+
+  .slip-face {
+    min-height: 285px;
+  }
+
+  .identity-name {
+    font-size: 22px;
+  }
+
+  .identity-id {
+    font-size: 13px;
+  }
+}

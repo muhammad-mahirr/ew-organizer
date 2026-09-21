@@ -214,6 +214,40 @@ function extractStudentId(
   return match?.[0] || "";
 }
 
+const getDepartmentFromStudentId = (
+  id: string
+) => {
+  const parts = id.split("-");
+
+  if (parts.length < 3) {
+    return "";
+  }
+
+  const code = parts[2];
+
+  const departments: Record<string, string> = {
+    "10": "Business Administration (BBA)",
+    "11": "Pharmacy & Public Health Sciences (PPHS)",
+    "22": "Civil Engineering (CE)",
+    "27": "Data Science & Analytics (DSA)",
+    "30": "Economics (ECO)",
+    "32": "Mathematics",
+    "33": "Sociology",
+    "40": "English",
+    "42": "Information Studies (IS)",
+    "50": "Information & Communications Engineering (ICE)",
+    "60": "Computer Science & Engineering (CSE)",
+    "66": "Law (LLB)",
+    "70": "Pharmacy",
+    "77": "Genetic Engineering & Biotechnology (GEB)",
+    "80": "Electrical & Electronic Engineering (EEE)",
+  };
+
+  return departments[code] || "";
+};
+
+
+
 function extractStudentName(
   text: string
 ): string {
@@ -1334,6 +1368,9 @@ useEffect(() => {
   const [error, setError] =
     useState("");
 
+  const [isReplacingSlip, setIsReplacingSlip] =
+  useState(false);  
+
   const [editingIndex, setEditingIndex] =
     useState<number | null>(null);
 
@@ -1529,11 +1566,13 @@ try {
     setError(
       "No class schedule could be found in this file."
     );
-  } else {
-    setClasses(
-      parsedClasses
-    );
-  }
+} else {
+  setClasses(
+    parsedClasses
+  );
+
+  setIsReplacingSlip(false);
+}
 
 } catch (err) {
   console.error(err);
@@ -2480,71 +2519,142 @@ left.appendChild(
     </div>
 
 
-<div className="semester">
-  {studentName}
-</div>
+<a
+  href="https://portal.ewubd.edu/"
+  target="_blank"
+  rel="noopener noreferrer"
+  className="ewu-portal-button"
+>
+  EWU Portal
+</a>
 
       </header>
 
 
       <main>
 
-        <section className="upload-section">
+        <section className="slip-flip">
+  <div
+    className={`slip-flip-inner ${
+      classes.length > 0 && !isReplacingSlip
+        ? "is-flipped"
+        : ""
+    }`}
+  >
 
-          <div className="upload-icon">
-            📚
+    {/* FRONT — IMPORT */}
+    <div className="slip-face slip-front">
+
+      <div className="upload-section">
+
+        <div className="upload-icon">
+          📚
+        </div>
+
+        <h2>
+          Import your semester slip
+        </h2>
+
+        <p>
+          Upload your EWU advising slip
+          in PDF or Excel format.
+        </p>
+
+        <label className="upload-button">
+
+          Choose PDF or Excel
+
+          <input
+            type="file"
+            accept=".pdf,.xlsx,.xls"
+            onChange={(event) => {
+              setIsReplacingSlip(false);
+              handleFile(event);
+            }}
+            hidden
+          />
+
+        </label>
+
+        {fileName && (
+          <div className="selected-file">
+            ✓ {fileName}
           </div>
+        )}
+
+        {loading && (
+          <div className="status">
+            Reading your routine...
+          </div>
+        )}
+
+        {error && (
+          <div className="error">
+            ⚠ {error}
+          </div>
+        )}
+
+      </div>
+
+    </div>
 
 
-          <h2>
-            Import your semester slip
-          </h2>
+    {/* BACK — STUDENT IDENTITY */}
+    <div className="slip-face slip-back">
 
+      <div className="identity-icon">
+        🎓
+      </div>
 
-          <p>
-            Upload your EWU advising slip
-            in PDF or Excel format.
-          </p>
+      <div className="identity-label">
+        STUDENT IDENTITY
+      </div>
 
+<h2 className="identity-name">
+  {studentFullName || "Student"}
+</h2>
 
-          <label className="upload-button">
+{studentId && (
+  <>
+    <div className="identity-id">
+      {studentId}
+    </div>
 
-            Choose PDF or Excel
+    {getDepartmentFromStudentId(studentId) && (
+      <div className="identity-department">
+        {getDepartmentFromStudentId(studentId)}
+      </div>
+    )}
 
-            <input
-              type="file"
-              accept=".pdf,.xlsx,.xls"
-              onChange={
-                handleFile
-              }
-              hidden
-            />
+  </>
+)}
 
-          </label>
+      {fileName && (
+        <div className="identity-file">
+          ✓ {fileName}
+        </div>
+      )}
 
+      <label className="replace-slip-button">
 
-          {fileName && (
-            <div className="selected-file">
-              ✓ {fileName}
-            </div>
-          )}
+        Replace semester slip
 
+        <input
+          type="file"
+          accept=".pdf,.xlsx,.xls"
+          onChange={(event) => {
+            setIsReplacingSlip(true);
+            handleFile(event);
+          }}
+          hidden
+        />
 
-          {loading && (
-            <div className="status">
-              Reading your routine...
-            </div>
-          )}
+      </label>
 
+    </div>
 
-          {error && (
-            <div className="error">
-              ⚠ {error}
-            </div>
-          )}
-
-        </section>
-
+  </div>
+</section>
 
 {classes.length > 0 && (
   <>
